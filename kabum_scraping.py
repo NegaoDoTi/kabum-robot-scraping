@@ -1,23 +1,23 @@
 import pandas
 import traceback
+import sys
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from waits import Waits
 from kabum_selectors import KabumSelectors
-#from selenium.webdriver.firefox.options import Options
-
+from selenium.webdriver.firefox.options import Options
 
 class KabumScrapping:
     
     def __init__(self):
-        self.__link = "https://www.kabum.com.br/computadores/notebooks/notebook-gamer"
+        self.__link = sys.argv[1]
         
-        # options = Options()
-        # options.add_argument("--headless")
-        self.__driver = webdriver.Firefox()
+        fireOptions = Options()
+        fireOptions.add_argument("--headless")
+        
+        self.__driver = webdriver.Firefox(options = fireOptions)
         
         self.__wait = Waits(self.__driver)
-        
         
     def main(self):
         try:
@@ -56,9 +56,13 @@ class KabumScrapping:
                 archive.write(f"{e}")
                 archive.close()
             
-    
     def loading(self):
         try:
+            if "kabum" not in self.__link:
+                del self.__link           
+                     
+                raise ValueError("Url invalida!")
+            
             self.__driver.get(self.__link)
             
             return {"error" : False}
@@ -67,11 +71,11 @@ class KabumScrapping:
         
     def number_pages(self):
         try:
-            number_pages = self.__wait.wait_visibility(KabumSelectors.b_price).text
+            max_number = self.__wait.wait_visibility_all(KabumSelectors.ul_pages)
             
-            number_pages = int(number_pages)/20
+            number_pages = int(max_number[-2].text)
             
-            return {"error" : False, "number" : int(number_pages)}
+            return {"error" : False, "number" : number_pages}
         except Exception as e:
             return {"error" : True, "type" : "erro ao achar numero de paginas", "mesage" : f"\n{e}\n{traceback.format_exc()}"}        
     
@@ -88,6 +92,9 @@ class KabumScrapping:
                 product_name = div.find_element(*KabumSelectors.span_name).text
                 
                 product_price = div.find_element(*KabumSelectors.span_price).text
+                product_price = product_price.replace("R$ ", "")
+                if product_price == "---":
+                    continue
                 product_link = div.find_element(By.TAG_NAME, "a").get_attribute('href')
                 
                 names.append(product_name)
@@ -101,7 +108,17 @@ class KabumScrapping:
         
     def page(self, number):
         try:
-            self.__driver.get(f"https://www.kabum.com.br/computadores/notebooks/notebook-gamer?page_number={number}&page_size=20&facet_filters=&sort=price")
+            
+            if "kabum" in sys.argv[1]:
+                if "page_number=1" in sys.argv[1]:
+                    
+                    url = sys.argv[1].replace("page_number=1", f"page_number={number}")
+                else:
+                    url = sys.argv[1] + f"?page_number={number}"
+            else:
+                raise ValueError("A url não é valida")
+            
+            self.__driver.get(url)
 
             return {"error" : False}
         except Exception as e:
@@ -109,22 +126,21 @@ class KabumScrapping:
         
     def export_excel(self, infos:list):
         try:
-            hearders = ["Modelos", "Preços", "Links"]
+            hearders = ["Modelos", "Preços R$", "Links"]
             
             df = pandas.DataFrame(data = infos, columns = hearders)
             print(df)
-            excel_archive = pandas.ExcelWriter("notebooks_kabum.xlsx", engine = "openpyxl")
+            excel_archive = pandas.ExcelWriter(f"{sys.argv[2]}.xlsx", engine = "openpyxl")
             
             df.to_excel(excel_archive, sheet_name="router_list", index = False)
             excel_archive.close()
-
-            print("Arquivo Excel Gerado com sucesso!")
+            
+            print("Arquivo Excel gerado com Sucesso!")
             
             return {"error" : False}
             
         except Exception as e:
             return {"error" : True, "type" : "erro ao exportar arquivo xlsx", "mesage" : f"\n{e}\n{traceback.format_exc()}"}
-
 
 if __name__ == "__main__":
     
